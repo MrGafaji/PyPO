@@ -189,10 +189,11 @@ void Parabola_uv(T *parabola, U xu_lo, U xu_up, U yv_lo,
         for (int j=0; j < ncy; j++)
         {
             v = (j * dv + yv_lo) * M_PI/180;
-            ecc_fac = 1 / sqrt(1 - (ecc_uv*cos(v))*(ecc_uv*cos(v))); //consider moving into separate loop + array alloc
-            duv = du0 * majmin * ecc_fac; 
-            u = i*duv + xu_lo*ecc_fac;
-            dudv = -u * ecc_fac*ecc_fac * ecc_uv*ecc_uv * cos(v) * sin(v);
+            ecc_fac = sqrt(1 - ecc_uv*ecc_uv*sin(v)*sin(v));
+            duv = du0 / ecc_fac; 
+            u = i*duv + xu_lo / ecc_fac;
+
+            dudv = u / (ecc_fac*ecc_fac) * ecc_uv*ecc_uv * cos(v) * sin(v);
 
             idx = i*ncy + j;
 
@@ -232,7 +233,7 @@ void Parabola_uv(T *parabola, U xu_lo, U xu_up, U yv_lo,
             ut.ext(Qu, Qv, out);
             ut.abs(out, norm);
 
-            parabola->area[idx] = norm * duv * dv;
+            parabola->area[idx] = norm * duv * dv * M_PI/180;
 
             if (transform)
             {
@@ -376,10 +377,11 @@ void Hyperbola_uv(T *hyperbola, U xu_lo, U xu_up, U yv_lo,
         for (int j=0; j < ncy; j++)
         {
             v = (j * dv + yv_lo) * M_PI/180;
-            ecc_fac = 1 / sqrt(1 - (ecc_uv*cos(v))*(ecc_uv*cos(v))); //consider moving into separate loop + array alloc
-            duv = du0 * majmin * ecc_fac; 
-            u = i*duv + xu_lo*ecc_fac;
-            dudv = -u * ecc_fac*ecc_fac * ecc_uv*ecc_uv * cos(v) * sin(v);
+            ecc_fac = sqrt(1 - ecc_uv*ecc_uv*sin(v)*sin(v));
+            duv = du0 / ecc_fac; 
+            u = i*duv + xu_lo / ecc_fac;
+
+            dudv = u / (ecc_fac*ecc_fac) * ecc_uv*ecc_uv * cos(v) * sin(v);
 
             idx = i*ncy + j;
 
@@ -420,7 +422,7 @@ void Hyperbola_uv(T *hyperbola, U xu_lo, U xu_up, U yv_lo,
             ut.ext(Qu, Qv, out);
             ut.abs(out, norm);
 
-            hyperbola->area[idx] = norm * duv * dv;
+            hyperbola->area[idx] = norm * duv * dv * M_PI/180;
 
             if (transform)
             {
@@ -564,10 +566,11 @@ void Ellipse_uv(T *ellipse, U xu_lo, U xu_up, U yv_lo,
         for (int j=0; j < ncy; j++)
         {
             v = (j * dv + yv_lo) * M_PI/180;
-            ecc_fac = 1 / sqrt(1 - (ecc_uv*cos(v))*(ecc_uv*cos(v))); //consider moving into separate loop + array alloc
-            duv = du0 * majmin * ecc_fac; 
-            u = i*duv + xu_lo*ecc_fac;
-            dudv = -u * ecc_fac*ecc_fac * ecc_uv*ecc_uv * cos(v) * sin(v);
+            ecc_fac = sqrt(1 - ecc_uv*ecc_uv*sin(v)*sin(v));
+            duv = du0 / ecc_fac; 
+            u = i*duv + xu_lo / ecc_fac;
+
+            dudv = u / (ecc_fac*ecc_fac) * ecc_uv*ecc_uv * cos(v) * sin(v);
 
             idx = i*ncy + j;
 
@@ -608,7 +611,7 @@ void Ellipse_uv(T *ellipse, U xu_lo, U xu_up, U yv_lo,
             ut.ext(Qu, Qv, out);
             ut.abs(out, norm);
 
-            ellipse->area[idx] = norm * duv * dv;
+            ellipse->area[idx] = norm * duv * dv * M_PI/180;
             
             if (transform)
             {
@@ -716,8 +719,6 @@ void Plane_uv(T *plane, U xu_lo, U xu_up, U yv_lo,
     U u, du0, duv;
     U v, dv;
     U x, y;
-
-    U majmin = sqrt(1 - ecc_uv*ecc_uv);
     
     du0 = (xu_up - xu_lo) / (ncx - 1);
     /* For v (polar angle) range, drop the -1, so that the upper value is excluded 
@@ -739,9 +740,9 @@ void Plane_uv(T *plane, U xu_lo, U xu_up, U yv_lo,
         for (int j=0; j < ncy; j++)
         {
             v = (j * dv + yv_lo) * M_PI/180;
-            ecc_fac = 1 / sqrt(1 - (ecc_uv*cos(v))*(ecc_uv*cos(v))); //consider moving into separate loop + array alloc
-            duv = du0 * majmin * ecc_fac; 
-            u = i*duv + xu_lo*ecc_fac;
+            ecc_fac = sqrt(1 - ecc_uv*ecc_uv*sin(v)*sin(v));
+            duv = du0 / ecc_fac; 
+            u = i*duv + xu_lo / ecc_fac;
             
             idx = i*ncy + j;
             
@@ -759,7 +760,7 @@ void Plane_uv(T *plane, U xu_lo, U xu_up, U yv_lo,
             plane->nz[idx] = nfac * 1;
 
             // Calculate du along value of v, dv unchanged.
-            plane->area[idx] = u * duv * dv;            
+            plane->area[idx] = u * duv * dv * M_PI/180;            
             if (transform)
             {
                 transformGrids<T, U>(plane, idx, inp, out, &ut, mat);
@@ -815,19 +816,22 @@ void Plane_AoE(T *plane, U xu_lo, U xu_up, U yv_lo,
 
             if (spheric)
             {
-                plane->x[idx] = sqrt(Az*Az + El*El) * M_PI/180;
+                U r = sqrt(Az*Az + El*El) * M_PI/180;
+                plane->x[idx] = r;
                 plane->y[idx] = atan2(El, Az);
 
                     if (plane->y[idx] != plane->y[idx])
                     {
                         plane->y[idx] = 0;
                     }
+                plane->area[idx] = cos(El*M_PI/180)*dA*dE*M_PI*M_PI/180/180;
             }
 
             else
             {
                 plane->x[idx] = Az;
                 plane->y[idx] = El;
+                plane->area[idx] = cos(El*M_PI/180)*dA*dE*M_PI*M_PI/180/180;
             }
 
             plane->z[idx] = 0;
@@ -835,8 +839,6 @@ void Plane_AoE(T *plane, U xu_lo, U xu_up, U yv_lo,
             plane->nx[idx] = 0;
             plane->ny[idx] = 0;
             plane->nz[idx] = 1;
-
-            plane->area[idx] = 1;
 
             if (transform)
             {
@@ -883,10 +885,8 @@ void generateGrid(reflparams refl, reflcontainer *container, bool transform, boo
     double xu_up = refl.lxu[1];
     double yv_lo = refl.lyv[0];
     double yv_up = refl.lyv[1];
-
     double xcenter = refl.gcenter[0];
     double ycenter = refl.gcenter[1];
-
     double ecc_uv = refl.ecc_uv;
     double rot_uv = refl.rot_uv * M_PI / 180;
 

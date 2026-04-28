@@ -5,6 +5,8 @@ System interface for PyPO.
 This script contains the System class definition.
 """
 
+from __future__ import annotations
+
 # Standard Python imports
 from scipy.optimize import fmin
 from scipy.interpolate import interp1d, griddata
@@ -17,7 +19,7 @@ import copy
 import logging
 from pathlib import Path
 import pickle 
-from typing import Self, Union
+from typing import Union
 
 # PyPO-specific modules
 import PyPO.BindRefl as BRefl
@@ -30,10 +32,11 @@ import PyPO.PyPOTypes as PTypes
 import PyPO.Checks as PChecks
 import PyPO.Config as Config
 from PyPO.CustomLogger import CustomLogger
+import PyPO.Colormaps as cmaps
 import PyPO.Plotter as PPlot
 import PyPO.Efficiencies as Effs
 import PyPO.FitGauss as FGauss
-from PyPO.Enums import Projections, FieldComponents, CurrentComponents, Units, Scales, Objects, Modes
+from PyPO.Enums import Projections, FieldComponents, CurrentComponents, Units, Scales, Objects, Modes, Unit
 
 import PyPO.WorldParam as world
 
@@ -443,7 +446,7 @@ class System(object):
                     obj : Objects = Objects.ELEMENT, 
                     mode : Modes = Modes.REL, 
                     pivot : np.ndarray = None, 
-                    keep_pol : bool = False):
+                    keep_pol :bool = False) -> None:
         """!
         Rotate reflector grids.
         
@@ -461,16 +464,17 @@ class System(object):
         @param mode Apply rotation relative to current orientation (Modes.REL), or rotate to specified orientation (Modes.ABS).
         @param pivot Numpy ndarray of length 3, containing pivot x, y and z co-ordinates, in mm. Defaults to pos. 
         @param keep_pol Keep polarisation of a field/current defined on the surface, if present.
-            If True, does not rotate polarisation of any defined fields/currents along with the rotation of reflector.
-            If False, rotates polarisation along with reflector. Defaults to False.
         """
-
         PChecks.check_array(rotation, self.clog)
-
+        rotation = self.copyObj(rotation).astype(np.float64)
+        
+        if pivot is not None:
+            PChecks.check_array(pivot, self.clog)
+            pivot = self.copyObj(pivot).astype(np.float64)
+        
         if obj == Objects.ELEMENT:
             PChecks.check_elemSystem(name, self.system, self.clog, extern=True)
             pivot = self.system[name]["pos"] if pivot is None else pivot
-            PChecks.check_array(pivot, self.clog)
             
             if mode == Modes.ABS:
                 Rtot = self._absRotationMat(rotation, self.system[name]["ori"], pivot)
@@ -499,7 +503,6 @@ class System(object):
         elif obj == Objects.GROUP:
             PChecks.check_groupSystem(name, self.groups, self.clog, extern=True)
             pivot = self.groups[name]["pos"] if pivot is None else pivot
-            PChecks.check_array(pivot, self.clog)
             
             if mode == Modes.ABS:
                 Rtot = self._absRotationMat(rotation, self.groups[name]["ori"], pivot)
@@ -537,7 +540,6 @@ class System(object):
         if obj == Objects.FRAME:
             PChecks.check_frameSystem(name, self.frames, self.clog, extern=True)
             pivot = self.frames[name].pos if pivot is None else pivot
-            PChecks.check_array(pivot, self.clog)
             
             if mode == Modes.ABS:
                 Rtot = self._absRotationMat(rotation, self.frames[name].ori, pivot)
@@ -564,7 +566,8 @@ class System(object):
                        name : str, 
                        translation : np.ndarray, 
                        obj : Objects = Objects.ELEMENT, 
-                       mode : Modes = Modes.REL) -> None:
+                       mode : Modes = Modes.REL
+                       ) -> None:
         """!
         Translate reflector grids.
         
@@ -581,54 +584,54 @@ class System(object):
         
         PChecks.check_array(translation, self.clog)
 
-        _translation = self.copyObj(translation)
+        translation = self.copyObj(translation).astype(np.float64)
         
         if obj == Objects.ELEMENT:
             if mode == Modes.ABS:
-                _translation -= self.system[name]["pos"]# - translation
+                translation -= self.system[name]["pos"]# - translation
             
             PChecks.check_elemSystem(name, self.system, self.clog, extern=True)
-            self.system[name]["transf"] = MatTransf.MatTranslate(_translation, self.system[name]["transf"])
-            self.system[name]["pos"] += _translation
+            self.system[name]["transf"] = MatTransf.MatTranslate(translation, self.system[name]["transf"])
+            self.system[name]["pos"] += translation
             
             if mode == Modes.ABS:
-                self.clog.info(f"Translated element {name} to {*['{:0.3e}'.format(x) for x in list(_translation)],} millimeters.")
+                self.clog.info(f"Translated element {name} to {*['{:0.3e}'.format(x) for x in list(translation)],} millimeters.")
             else:
-                self.clog.info(f"Translated element {name} by {*['{:0.3e}'.format(x) for x in list(_translation)],} millimeters.")
+                self.clog.info(f"Translated element {name} by {*['{:0.3e}'.format(x) for x in list(translation)],} millimeters.")
         
         elif obj == Objects.GROUP:
             if mode == Modes.ABS:
-                _translation -= self.groups[name]["pos"]# - translation
+                translation -= self.groups[name]["pos"]# - translation
             
             PChecks.check_groupSystem(name, self.groups, self.clog, extern=True)
             for elem in self.groups[name]["members"]:
-                self.system[elem]["transf"] = MatTransf.MatTranslate(_translation, self.system[elem]["transf"])
-                self.system[elem]["pos"] += _translation
+                self.system[elem]["transf"] = MatTransf.MatTranslate(translation, self.system[elem]["transf"])
+                self.system[elem]["pos"] += translation
             
-            self.groups[name]["pos"] += _translation
+            self.groups[name]["pos"] += translation
             
             if mode == Modes.ABS:
-                self.clog.info(f"Translated group {name} to {*['{:0.3e}'.format(x) for x in list(_translation)],} millimeters.")
+                self.clog.info(f"Translated group {name} to {*['{:0.3e}'.format(x) for x in list(translation)],} millimeters.")
             
             else:
-                self.clog.info(f"Translated group {name} by {*['{:0.3e}'.format(x) for x in list(_translation)],} millimeters.")
+                self.clog.info(f"Translated group {name} by {*['{:0.3e}'.format(x) for x in list(translation)],} millimeters.")
 
         elif obj == Objects.FRAME:
             if mode == Modes.ABS:
-                _translation -= self.frames[name].pos# - translation
+                translation -= self.frames[name].pos# - translation
             
             PChecks.check_frameSystem(name, self.frames, self.clog, extern=True)
             
 
-            self.frames[name].transf = MatTransf.MatTranslate(_translation)
+            self.frames[name].transf = MatTransf.MatTranslate(translation)
             _fr = BTransf.transformRays(self.frames[name])
             self.frames[name] = self.copyObj(_fr)
-            self.frames[name].pos += _translation
+            self.frames[name].pos += translation
             
             if mode == Modes.ABS:
-                self.clog.info(f"Translated frame {name} to {*['{:0.3e}'.format(x) for x in list(_translation)],} millimeters.")
+                self.clog.info(f"Translated frame {name} to {*['{:0.3e}'.format(x) for x in list(translation)],} millimeters.")
             else:
-                self.clog.info(f"Translated frame {name} by {*['{:0.3e}'.format(x) for x in list(_translation)],} millimeters.")
+                self.clog.info(f"Translated frame {name} by {*['{:0.3e}'.format(x) for x in list(translation)],} millimeters.")
     
     def homeReflector(self, name : str, obj : Objects = Objects.ELEMENT, trans : bool = True, rot : bool = True):
         """!
@@ -1368,13 +1371,14 @@ class System(object):
 
     def createGaussian(self, gaussDict : dict, name_surface : str):
         """!
-        Create a vectorial Gaussian beam.
+        Create a Gaussian field.
         
-        This method creates a general, potentially astigmatic, vectorial Gaussian beam.
-        The beam is evaluated with the focus at z = 0. 
+        This method creates a potentially astigmatic Gaussian beam, evaluated with the beamwaist at z = 0 
+        and propagating in the positive z-direction.  Only the co-polar E field is created.
+        
         The surface on which the beam is calculated, defined by "name_source", does not have to lie in or be parallel to the xy-plane.
         Instead, the Gaussian beam is evaluated on the surface as-is, evaluating the Gaussian beam at the xyz-points on the surface.
-        Still, the focus is at z = 0. If one wishes to displace the focal point, the PO fields and currents need to be translated after generating the Gaussian beam.
+        If one wishes to displace the beamwaist, the PO fields and currents need to be translated after generating the Gaussian beam.
         
         @ingroup public_api_po
         
@@ -1397,6 +1401,48 @@ class System(object):
 
         self.fields[_gaussDict["name"]] = gauss_in[0]
         self.currents[_gaussDict["name"]] = gauss_in[1]
+
+    def createGaussianBeam(self, gaussDict : dict, name_surface : str):
+        """!
+        Create a symmetric vector Gaussian beam using the complex source point method.
+        
+        This method creates a vectorial Gaussian beam propagating along the positive z-axis, with the primary E-field
+        polarized along the positive x-axis. Unless specified, the power in the beam is normalized to 4pi √W (this ensures
+        that the farfields are in dBi).
+        
+        The beam is defined by any pair of Gaussian beam parameters from w0, z, w, and R (in order of precedence), defined on
+        the z=0 plane. Positive R offsets the beamwaist in the negative z-direction.
+        
+        The surface on which the beam is calculated, defined by "name_source", does not have to lie on or be parallel to 
+        the xy-plane at z=0.  Instead, the Gaussian beam is evaluated on the surface as-is, evaluating the Gaussian beam at the 
+        xyz-points on the surface. If one wishes to displace the plane on which the beam is defined, the PO fields 
+        and currents need to be translated after generating the Gaussian beam.
+        
+        @ingroup public_api_po
+        
+        @param gaussDict A vecGPODict containing parameters for the Gaussian beam.
+        @param name_surface Name of plane on which to define Gaussian.
+        
+        @see GDict
+        """
+
+        PChecks.check_elemSystem(name_surface, self.system, self.clog, extern=True)
+
+        _gaussDict = self.copyObj(gaussDict)
+        PChecks.check_vecGPODict(_gaussDict, self.fields, self.clog)
+        print(_gaussDict)
+        
+        refldict = self.system[name_surface]
+        
+        gauss_in = BBeam.makeGaussBeam(_gaussDict, refldict)
+        
+        k = 2 * np.pi / _gaussDict["lam"]
+        gauss_in[0].setMeta(name_surface, k)
+        gauss_in[1].setMeta(name_surface, k)
+
+        self.fields[_gaussDict["name"]] = gauss_in[0]
+        self.currents[_gaussDict["name"]] = gauss_in[1]
+
     
     def createScalarGaussian(self, gaussDict : dict, name_surface : str):
         """!
@@ -1809,11 +1855,11 @@ class System(object):
     def calcBeamCuts(self, 
                      name_field : str, 
                      comp : FieldComponents, 
-                     interp : int = 1001, 
+                     npoints : int = 1001, 
                      phi : float = 0, 
                      center : bool = True, 
                      align : bool = True,
-                     norm : FieldComponents = FieldComponents.NONE, 
+                     norm : FieldComponents | bool = True, 
                      transform : bool = False, 
                      scale : Scales = Scales.dB,
                      full_output : bool = False,
@@ -1828,11 +1874,13 @@ class System(object):
         oriented along the x- and y-axes.
         It is also possible to not do this and instead directly calculate the cross sections along the x- and y-axes as-is.
         
+        The fields in the cuts are calculated by cubic interpolation of the input fields along the line of the cut.
+        
         @ingroup public_api_po
         
         @param name_field Name of field object.
         @param comp Component of field object. Instance of FieldComponents enum object.
-        @param interp Number of points in x and y strip. Defaults to 1001.
+        @param npoints Number of points in cut strips. Defaults to 1001.
         @param phi Manual rotation of cuts w.r.t. to the x-y cardinal planes.
         @param center Whether to center the cardinal planes on the peak of the beam pattern.
         @param align Whether to align the cardinal planes to the beam pattern minor and major axes.
@@ -1846,8 +1894,10 @@ class System(object):
         @returns x_strip Co-ordinate values for x_cut.
         @returns y_strip Co-ordinate values for y_cut.
         """
-
-        norm = comp if norm is FieldComponents.NONE else norm
+        # Set the norm component equal to the component
+        # This is not triggered if a vector FieldComponents is passed
+        if norm is True or norm is FieldComponents.NONE:
+            norm = comp
 
         PChecks.check_fieldSystem(name_field, self.fields, self.clog, extern=True)
  
@@ -1865,10 +1915,13 @@ class System(object):
         y_edges = np.array([np.min(grids.y), np.max(grids.y)])
 
         field = np.absolute(self.fields[name_field][comp.value])
-        max_norm = np.nanmax(np.absolute(self.fields[name_field][norm.value]))
+        if norm:
+            max_norm = np.nanmax(np.absolute(self.fields[name_field][norm.value]))
+        else:
+            max_norm = 1.0
 
         center_use = np.zeros(2)
-        rot_use = np.radians(phi)
+        rot_use = np.deg2rad(phi)
 
         if center or align:
             popt = self.fitGaussAbs(name_field, comp, scale=Scales.LIN, full_output=True)
@@ -1884,10 +1937,10 @@ class System(object):
         ex_edges = -np.sin(rot_use) * y_edges + center_use[0]
         ey_edges = np.cos(rot_use) * y_edges + center_use[1]
         
-        hx_edges_interp = np.linspace(hx_edges[0], hx_edges[1], interp)
-        hy_edges_interp = np.linspace(hy_edges[0], hy_edges[1], interp)
-        ex_edges_interp = np.linspace(ex_edges[0], ex_edges[1], interp)
-        ey_edges_interp = np.linspace(ey_edges[0], ey_edges[1], interp)
+        hx_edges_interp = np.linspace(hx_edges[0], hx_edges[1], npoints)
+        hy_edges_interp = np.linspace(hy_edges[0], hy_edges[1], npoints)
+        ex_edges_interp = np.linspace(ex_edges[0], ex_edges[1], npoints)
+        ey_edges_interp = np.linspace(ey_edges[0], ey_edges[1], npoints)
         
         h_cut = griddata((grids.x.ravel(), grids.y.ravel()), field.ravel(), (hx_edges_interp, hy_edges_interp), method="cubic") 
         e_cut = griddata((grids.x.ravel(), grids.y.ravel()), field.ravel(), (ex_edges_interp, ey_edges_interp), method="cubic") 
@@ -1896,17 +1949,22 @@ class System(object):
             h_cut = 20 * np.log10(h_cut / max_norm)
             e_cut = 20 * np.log10(e_cut / max_norm)
         
-        elif scale == Scales.LIN:
+        elif scale == Scales.AMP:
             h_cut = h_cut / max_norm
             e_cut = e_cut / max_norm
 
-        h_strip = np.linspace(x_edges[0], x_edges[1], interp)
-        e_strip = np.linspace(y_edges[0], y_edges[1], interp)
+        else: # scale == Scales.LIN:
+            h_cut = (h_cut / max_norm)**2
+            e_cut = (e_cut / max_norm)**2
+            
+        h_strip = np.linspace(x_edges[0], x_edges[1], npoints)
+        e_strip = np.linspace(y_edges[0], y_edges[1], npoints)
         
         self.revertToSnap(name_surf, "_")
         self.deleteSnap(name_surf, "_")
 
         self.setLoggingVerbosity(verbose=verbosity_init)
+
         if full_output:
             return h_cut, e_cut, h_strip, e_strip, hx_edges_interp, hy_edges_interp, ex_edges_interp, ey_edges_interp
    
@@ -1915,14 +1973,19 @@ class System(object):
 
     def plotBeamCut(self, 
                     name_field : str, 
-                    comp : FieldComponents, 
+                    comp : FieldComponents,
+                    phi : float = 0.0, 
+                    comp_cross : FieldComponents = FieldComponents.NONE, 
+                    phi_cross : float = 45.0,
                     vmin : float = None, 
                     vmax : float = None, 
                     center : bool = True, 
-                    align : bool = True, 
+                    align : bool = True,
+                    norm : bool = True, 
                     scale : Scales = Scales.dB, 
-                    units : Units = Units.DEG, 
-                    name : str = "", 
+                    units : Unit = Units.DEG, 
+                    name : str = "",
+                    title : str = "", 
                     show : bool = True, 
                     save : bool = False, 
                     ret : bool = False
@@ -1943,44 +2006,53 @@ class System(object):
         @param vmax Maximum amplitude value to display. Default is 0.
         @param center Whether to calculate beam center and center the beam cuts on this point.
         @param align Whether to find position angle of beam cuts and align cut axes to this.
+        @param norm Plot normalized to 1.0/0.0 dB on first cut
         @param scale Plot in decibels or linear.
         @param units The units of the axes. Instance of Units enum object.
         @param name Name of .png file where plot is saved. Only when save=True. Default is "".
         @param show Show plot. Default is True.
         @param save Save plot to savePath.
-        @param ret Return the Figure and Axis object. Default is False.
+        @param ret Return the Figure and Axis object. Only called by GUI. Default is False.
         
         @returns fig Figure object.
         @returns ax Axes object.
         """
-
-        h_cut, e_cut, h_strip, e_strip = self.calcBeamCuts(name_field, comp, center=center, align=align, scale=scale)
-
-        vmin = np.nanmin([np.nanmin(h_cut), np.nanmin(e_cut)]) if vmin is None else vmin
-        vmax = np.nanmax([np.nanmax(h_cut), np.nanmax(e_cut)]) if vmax is None else vmax
+        # Always get the cuts in amplitude units - we will apply the scales in the plotter code.
+        #
+        # calcBeamCuts will handle normalization if requested - we do not need to pass it to Plotter.plotBeamCut
+        E_cut, H_cut, E_strip, H_strip = self.calcBeamCuts(name_field, comp, phi=phi, center=center, align=align, norm=norm, scale=Scales.AMP)
+            
+        labels = [f'{comp.name} $\phi=${phi:.0f}°', f'{comp.name} $\phi=${phi+90:.0f}°']
         
-        fig, ax = PPlot.plotBeamCut(h_cut, 
-                                    e_cut, 
-                                    h_strip, 
-                                    e_strip, 
-                                    vmin, 
-                                    vmax, 
-                                    units)
+        if title == "":
+            title = f"{name_field} Cuts"
+        
+        fig, ax = PPlot.plotBeamCut(E_strip, E_cut, units=units, vmin=vmin, vmax=vmax, amp_only=True, title=title, scale=scale, label=labels[0])
+        PPlot.plotBeamCut(H_strip, H_cut, units=units, amp_only=True, scale=scale, figax=(fig,ax), label=labels[1])
+        
+        if comp_cross is not FieldComponents.NONE:
+            if norm:
+                norm_cross = comp
+            else:
+                norm_cross = False
+            cr45_cut, cr135_cut, cr45_strip, cr135_strip = self.calcBeamCuts(name_field, comp_cross, phi=phi_cross, align=False, center=False, norm=norm_cross, scale=Scales.AMP)
+            labels = [f'{comp_cross.name} $\phi=${phi_cross:.0f}°', f'{comp_cross.name} $\phi=${phi_cross+90:.0f}°']
+            PPlot.plotBeamCut(cr45_strip, cr45_cut, units=units, amp_only=True, scale=scale, figax=(fig, ax), label=labels[0])
+            PPlot.plotBeamCut(cr135_strip, cr135_cut, units=units, amp_only=True, scale=scale, figax=(fig, ax), label=labels[1])
 
+        if save:
+            pt.savefig(fname=self.savePath + '{}_cuts.png'.format(name),
+                        bbox_inches='tight', dpi=300)
+        
         if ret:
             return fig, ax
-
-        elif save:
-            pt.savefig(fname=self.savePath + '{}_EH_cut.jpg'.format(name),
-                        bbox_inches='tight', dpi=300)
-            pt.close()
-
         elif show:
             pt.show()
 
     def calcHPBW(self, 
                  name_field : str, 
                  comp : FieldComponents, 
+                 interp : int = 50, 
                  center : bool = False, 
                  align : float = False
                  ) -> tuple [float, float]:
@@ -1994,6 +2066,7 @@ class System(object):
         
         @param name_field Name of field object.
         @param comp Component of field object. Instance of FieldComponents enum object.
+        @param interp Interpolation factor for finding the HPBW. Defaults to 50.
         @param center Whether to center the beam cuts on amplitude center. Use only if beam has well defined amplitude center.
         @param align Whether to take beam cuts along cardinal planes rotated by the position angle.
         
@@ -2001,15 +2074,20 @@ class System(object):
         @returns HPBW_H Half-power beamwidth along H-plane in units of surface of beam.
         """
 
-        h_cut, e_cut, h_strip, e_strip = self.calcBeamCuts(name_field, comp, center=center, align=align)
+        x_cut, y_cut, x_strip, y_strip = self.calcBeamCuts(name_field, comp, center=center, align=align)
 
-        h_masked = h_strip[h_cut > -3]
-        e_masked = e_strip[e_cut > -3]
+        x_interp = np.linspace(np.min(x_strip), np.max(x_strip), num=len(x_strip) * interp)
+        y_interp = np.linspace(np.min(y_strip), np.max(y_strip), num=len(y_strip) * interp)
+        x_cut_interp = interp1d(x_strip, x_cut, kind="cubic")(x_interp)
+        y_cut_interp = interp1d(y_strip, y_cut, kind="cubic")(y_interp)
 
-        HPBW_h = np.absolute(np.max(h_masked) - np.min(h_masked))
-        HPBW_e = np.absolute(np.max(e_masked) - np.min(e_masked))
+        mask_x = (x_cut_interp > -3.01) & (x_cut_interp < -2.99)
+        mask_y = (y_cut_interp > -3.01) & (y_cut_interp < -2.99)
 
-        return HPBW_h, HPBW_e
+        HPBW_E = np.mean(np.absolute(x_interp[mask_x]))
+        HPBW_H = np.mean(np.absolute(y_interp[mask_y]))
+
+        return HPBW_E, HPBW_H
 
     def createPointSource(self, PSDict : dict, name_surface : str):
         """!
@@ -2227,13 +2305,13 @@ class System(object):
             obj_interp.setMeta(obj_out.surf + "_interp", obj_out.k)
             self.currents[name + "_interp"] = obj_interp
 
-    def plotBeam2D(self, name_obj : str, comp : FieldComponents = FieldComponents.NONE, contour : str = None, 
+    def plotBeam2D(self, name_obj : str, comp : fieldOrCurrentComponents = FieldComponents.Ex, contour : str = None, 
                     contour_comp : fieldOrCurrentComponents  = FieldComponents.NONE,
                     vmin : float = None, vmax : float = None, levels : contourLevels = None, 
                     show : bool = True, amp_only : bool = False, save : bool = False, norm : bool = True,
                     aperDict : dict = None, scale : Scales = Scales.dB, project : Projections = Projections.xy,
-                    units : Units = Units.MM, name : str = "", titleA : str ="Power", titleP : str = "Phase",
-                    unwrap_phase : bool = False, ret : bool = False
+                    units : Unit = Units.MM, name : str = "", title : str = None, titleA : str ="Power", titleP : str = "Phase",
+                    unwrap_phase : bool = False, correct_phase : bool | int | np.ndarray = False, ret : bool = False
                     ) -> tuple[pt.Figure, pt.Axes]:
         """!
         Generate a 2D plot of a PO (scalar)field or current.
@@ -2247,7 +2325,7 @@ class System(object):
         @param comp Component of field or current to plot. String of two characters; an uppercase {E, H, J, M} for field followed by a lowercase {x, y, z} for component. (e.g: 'Jz')
         @param contour A PyPO field or current component to plot as contour.
         @param contour_comp Component of contour to plot as contour. If None, assumes the contour is a scalarfield.
-        @param vmin Minimum amplitude value to display. Default is -30.
+        @param vmin Minimum amplitude value to display. Default is -30. If not normalized, vmin is the range below vmax.
         @param vmax Maximum amplitude value to display. Default is 0.
         @param levels Levels for contourplot.
         @param show Show plot. Default is True.
@@ -2259,10 +2337,12 @@ class System(object):
         @param project Set abscissa and ordinate of plot. Should be given as an instance of the Projection enum. Default is Projection.xy.
         @param units The units of the axes. Instance of Units enum object.
         @param name Name of .png file where plot is saved. Only when save=True. Default is "".
+        @param title An overall title for the plot. Defaults to the field name and component.
         @param titleA Title of the amplitude plot. Default is "Amp".
         @param titleP Title of the phase plot. Default is "Phase".
         @param unwrap_phase Unwrap the phase patter. Prevents annular structure in phase pattern. Default is False.
-        @param ret Return the Figure and Axis object. Default is False.
+        @param correct_phase Correct the phase for offset from the center of the reflector along the normal, or along a 3-vector direction.  Sign of the int sets the direction of the phase factor to apply.
+        @param ret Return the Figure and Axis object. Only called by GUI. Default is False.
         
         @returns fig Figure object.
         @returns ax Axes object.
@@ -2275,18 +2355,22 @@ class System(object):
         if comp == FieldComponents.NONE:
             field_comp = self.scalarfields[name_obj].S
             name_surface = self.scalarfields[name_obj].surf
+            k = self.scalarfields[name_obj].k
         
         elif isinstance(comp, FieldComponents):
             PChecks.check_fieldSystem(name_obj, self.fields, self.clog, extern=True)
             field = self.fields[name_obj]
             name_surface = field.surf
+            k = field.k
             field_comp = field[comp.value]
 
         elif isinstance(comp, CurrentComponents):
             PChecks.check_currentSystem(name_obj, self.currents, self.clog, extern=True)
             field = self.currents[name_obj] 
             name_surface = field.surf
+            k = field.k
             field_comp = field[comp.value]
+
 
         if contour is not None:
             if contour_comp == FieldComponents.NONE:
@@ -2304,12 +2388,22 @@ class System(object):
             contour_pl = contour
 
         plotObject = self.system[name_surface]
+        
+        if plotObject['gmode'] == 2:
+            reflGrid = self.generateGrids(name_surface, spheric=False)        
+        else:
+            reflGrid = self.generateGrids(name_surface)
 
-        fig, ax = PPlot.plotBeam2D(plotObject, field_comp, contour_pl,
-                        vmin, vmax, levels, amp_only,
-                        norm, aperDict, scale, project,
-                        units, titleA, titleP, unwrap_phase)
+        if title is None:
+            title = f"{name_obj} {comp.name}"
 
+        fig, ax = PPlot.plotBeam2D(reflGrid, field_comp, gmode=plotObject['gmode'], 
+                                   contour=contour_pl, levels=levels,
+                                   aperDict=aperDict,
+                                   norm=norm, vmin=vmin, vmax=vmax, 
+                                   amp_only=amp_only, unwrap_phase=unwrap_phase, correct_phase=correct_phase, k=k,
+                                   project=project, units=units,
+                                   figax=None, title=title, cmap=cmaps.parula)
         if ret:
             return fig, ax
 
@@ -2322,7 +2416,7 @@ class System(object):
 
     def plot3D(self, name_surface : str, cmap : cm = cm.cool,
             norm : bool = False, fine : int = 2, show : bool = True, foc1 : bool = False, 
-            foc2 : bool = False, save : bool = False, ret : bool = False
+            foc2 : bool = False, save : bool = False, ret : bool = False, units : Unit = Units.MM
             ) -> tuple[pt.Figure, pt.Axes]:
         """!
         Plot a 3D reflector.
@@ -2352,12 +2446,12 @@ class System(object):
             for n_s in name_surface:
                 PChecks.check_elemSystem(n_s, self.system, self.clog, extern=True)
                 plotObject = self.system[n_s]
-                PPlot.plot3D(plotObject, ax, fine, cmap, norm, foc1, foc2)
+                PPlot.plot3D(plotObject, ax, fine, cmap, norm, foc1, foc2, units=units)
         
         else:
             PChecks.check_elemSystem(name_surface, self.system, self.clog, extern=True)
             plotObject = self.system[name_surface]
-            PPlot.plot3D(plotObject, ax, fine, cmap, norm, foc1, foc2)
+            PPlot.plot3D(plotObject, ax, fine, cmap, norm, foc1, foc2, units=units)
 
         if ret:
             return fig, ax
@@ -2371,7 +2465,7 @@ class System(object):
 
     def plotSystem(self, cmap : cm = cm.cool, norm : bool = False, fine : int = 2, show : bool = True, foc1 : bool = False, 
                    foc2 : bool = False, save : bool = False, ret : bool = False, select : list[str] = None, RTframes : list[str] = None, 
-                   RTcolor : str = "black"
+                   RTcolor : str = "black", units : Unit = Units.MM
                 ) -> tuple[pt.Figure, pt.Axes]:
         """!
         Plot the current system. Plots the reflectors and optionally ray-trace frames in a 3D plot.
@@ -2419,7 +2513,7 @@ class System(object):
 
         fig, ax = pt.subplots(figsize=(10,10), subplot_kw={"projection": "3d"})
         PPlot.plotSystem(plotDict, ax, fine, cmap,norm,
-                    foc1, foc2, _RTframes, RTcolor)
+                    foc1, foc2, _RTframes, RTcolor, units=units)
 
         if ret:
             return fig, ax
@@ -2431,7 +2525,7 @@ class System(object):
         elif show:
             pt.show()
     
-    def plotGroup(self, name_group : str, show : bool = True, ret : bool = False) -> tuple[pt.Figure, pt.Axes]:
+    def plotGroup(self, name_group : str, show : bool = True, ret : bool = False, units : Unit = Units.MM) -> tuple[pt.Figure, pt.Axes]:
         """!
         Plot a group of reflectors.
         
@@ -2454,7 +2548,7 @@ class System(object):
             fig, ax = self.plotSystem(select=select, show=False, ret=True)
             return fig,ax
         else:
-            self.plotSystem(select=select, show=show)
+            self.plotSystem(select=select, show=show, units=units)
 
     def plotRTframe(self, name_frame : str, project : Projections = Projections.xy, ret : bool = False, aspect : float = 1, units : Units = Units.MM):
         """!
@@ -2479,7 +2573,7 @@ class System(object):
         if ret:
             return PPlot.plotRTframe(self.frames[name_frame], project, self.savePath, ret, aspect, units)
         else:
-            PPlot.plotRTframe(self.frames[name_frame], project, self.savePath, ret, aspect, units)
+            PPlot.plotRTframe(self.frames[name_frame], project, self.savePath, ret, aspect, units = units)
 
     def findRTfocus(self, name_frame : str, f0 : float = None, tol : float = 1e-12) -> np.ndarray:
         """!
@@ -2730,6 +2824,208 @@ class System(object):
         
         self.clog.result(f"Found converged solution, gridsize: {*['{:0.3e}'.format(x) for x in list(gridsize)],}")
         return gridsize
+
+    def convergeOnTarget(self, source_field : str, name_scatterer : str, name_target : str, tol : float = 1e-2, target_gridsize : np.ndarray = None, mult : int = 2, div : int = 3, max_iter : int = 16) -> int:
+        """!
+        Calculate gridsize for which calculation converges.
+        
+        This function calculates the gridsize for a scattering surface in order to obtain a convergent solution
+        on a target surface.
+        
+        First, some extreme points are selected on the target surface.
+        The strongest component of the source distribution is then selected and copied into a PO scalarfield object.
+        The scalarfield is propagated to a test grid on the scatterer, and then to the target test points.
+        At each step, the power in the test points is calculated and compared with the previous result.
+        If the difference in results is smaller than the given tolerance, the next largest gridsize is accepted as an upper limit on the
+        converged gridsize. If not, another iteration is started, with a grid size multiplied by `mult`.
+        Once an upper limit is found, the difference between the last unconverged and first converged gridsizes is
+        divided in two, and the convergence of the new grid size tested against the converged result. If
+        the new grid size is also converged, then it becomes the new first converged gridsize. This subdivision
+        process will take place up to `div` times.
+        
+        If the maximal number of iterations is exceeded, `PyPO` will throw an error and stop.
+        
+        This process is carried out seperately for each grid dimension, with a minimal number of points
+        in the untested direction.
+        
+        @ingroup public_api_po
+        
+        @param source_field Name of source field to use. Should be the field that is to be propagated to the scatterer.
+        @param name_scatterer Name of the reflector to calculate the converged grid size for
+        @param name_target Name of target surface for the next step in the propagation.
+        @param tol Tolerance for specifying when convergence has been reached.
+        @param target_gridsize Size of the grid on the target to use for evaluating the accuracy.
+        @param mult Multiplication in linear gridsize for each iteration.
+        @param div Number of divisions to make when subdividing a converged grid .
+        @param max_iter Maximum number of times to increase grid size before error.
+        
+        @returns gridsize Gridsize for which solution converged.
+        """
+
+        self.clog.work(f"*** Starting auto-convergence of {name_scatterer} on {name_target} *** ")
+        logstate = self.verbosity
+        self.setLoggingVerbosity(False)
+        diff = 1e99
+
+        P0 = 1e99
+
+        # Find the strongest component of the source field/current
+        max_Field = []
+        if source_field in self.fields:
+            for i in range(6):
+                max_Field.append(np.max(np.absolute(self.fields[source_field][i])))
+            
+            comp = self.fields[source_field][np.argmax(np.array(max_Field))]
+  
+            self.scalarfields[f"_{source_field}"] = PTypes.scalarfield(comp)
+            self.scalarfields[f"_{source_field}"].setMeta(self.fields[source_field].surf, self.fields[source_field].k)
+            
+        elif source_field in self.currents:
+            for i in range(6):
+                max_Field.append(np.max(np.absolute(self.currents[source_field][i])))
+            
+            comp = self.currents[source_field][np.argmax(np.array(max_Field))]
+  
+            self.scalarfields[f"_{source_field}"] = PTypes.scalarfield(comp)
+            self.scalarfields[f"_{source_field}"].setMeta(self.currents[source_field].surf, self.currents[source_field].k)
+        elif source_field in self.scalarfields:
+            max_Field.append(np.max(np.absolute(self.scalarfields[source_field])))
+            self.scalarfields[f"_{source_field}"] = self.scalarfields[source_field]
+            
+        # Create target grid
+        #
+        # We create a grid on the target with a minimal number of points
+        # 
+        # For an xy grid, we choose a 3x3 grid across the scatterer. This 
+        # places points on symmetry and 45° planes, and at the center, which
+        # should avoid issues with symmetric systems that have zeroes along
+        # the E and H-plane symmetry axes.
+        #
+        # For UV grids, we choose a 3x6 grid
+        # This places points on the 60° planes - again avoiding placing
+        # points on the symmetry axes only.
+        self.copyElement(name_target, '_conv_target')
+        
+        gmode = self.system['_conv_target']['gmode']
+        if target_gridsize:
+            self.system['_conv_target']['gridsize'] = target_gridsize
+        else:
+            if gmode == 1: # UV grid
+                self.system['_conv_target']['gridsize'] = np.array((3, 6))
+            else: # XY or AoE grid
+                self.system['_conv_target']['gridsize'] = np.array((5, 5))
+        
+        # Create copy of scatterer for tests
+        self.copyElement(name_scatterer, '_conv_scatterer')
+        
+        # initialize test scatterer
+        if gmode == 1:
+            # V axis is ~3x larger than U axis for circular grids
+            self.system['_conv_scatterer']['gridsize'] = np.array((10, 30))
+        else:
+            self.system['_conv_scatterer']['gridsize'] = np.array((10, 10))
+        
+        # Create PO dicts
+        runPODict1 = {
+                "t_name"    : '_conv_scatterer',
+                "s_scalarfield" : f"_{source_field}",
+                "mode"      : "scalar",
+                "name_field"   : "_S_conv_scat"
+                }
+        
+        runPODict2 = {
+                "t_name"    : "_conv_target",
+                "s_scalarfield" : f"_S_conv_scat",
+                "mode"      : "scalar",
+                "name_field"   : "_S_conv_target"
+                }
+
+        # Run initial test
+        self.runPO(runPODict1)
+        self.runPO(runPODict2)
+        
+        # We will determine the error by finding the target point with the maximum 
+        # difference between steps
+        init_field = self.scalarfields['_S_conv_target'].S.copy()
+        
+        conv_grid = np.array([10, 10])
+        
+        # Run convergence in each grid direction
+        for i in range(2):
+            field = init_field.copy()
+            n=0
+            
+            diff = 1e99
+            
+            self.system['_conv_scatterer']["gridsize"] = np.array([10,10])
+            
+            while np.absolute(diff) > tol:
+                last_field = field.copy()
+                
+                gridsize = self.system['_conv_scatterer']['gridsize'][i]*mult
+                self.system['_conv_scatterer']["gridsize"][i] = gridsize
+            
+                self.runPO(runPODict1)
+                self.runPO(runPODict2)
+                
+                field = self.scalarfields['_S_conv_target'].S.copy()
+                diff_field = np.abs(np.abs((field - last_field)))
+                diff = np.max(diff_field)/np.max(np.abs(field))
+                
+                self.setLoggingVerbosity(logstate)
+                self.clog.work(f"Axis {i:d} Step {n+1:d}: Difference {diff:.3e} at gridsize[{gridsize:d}]")
+                self.setLoggingVerbosity(False)
+            
+                
+                n += 1
+                if n >= max_iter:
+                    break
+            
+            if n >= max_iter:
+                self.setLoggingVerbosity(logstate)
+                self.clog.error(f"Could not find converged solution for axis {i:d}, increase max_iter from {max_iter:d}")
+                self.clog.error(f"Returning 10*{mult:f}^{max_iter:d} = {gridsize:d}")
+                conv_grid[i] = gridsize
+                self.setLoggingVerbosity(False)
+                break
+            
+            conv_gridsize = gridsize
+            nonconv_gridsize = gridsize/mult
+            conv_field = last_field.copy()
+            
+            d = 0
+            while d < div:
+                next_grid = int((conv_gridsize + nonconv_gridsize) / 2)
+                self.system['_conv_scatterer']["gridsize"][i] = next_grid
+            
+                self.runPO(runPODict1)
+                self.runPO(runPODict2)
+                
+                field = self.scalarfields['_S_conv_target'].S.copy()
+                diff_field = np.abs(np.abs((field - conv_field)))
+                diff = np.max(diff_field)/np.max(np.abs(field))
+                
+                self.setLoggingVerbosity(logstate)
+                self.clog.work(f"Axis {i:d} Step {n + d+1:d}: Difference {diff:.3e} at gridsize[{next_grid:d}]")
+                self.setLoggingVerbosity(False)
+                if diff < tol: 
+                    # We are still converged at this gridsize, update converged gridsize and field
+                    conv_gridsize = next_grid
+                    conv_field = field.copy()
+                else:
+                    # This size is not converged, so update the largest nonconverged grid
+                    nonconv_gridsize = next_grid
+                    
+                d += 1
+                
+            conv_grid[i] = conv_gridsize
+        
+        
+        self.system[name_scatterer]["gridsize"] = conv_grid
+        self.setLoggingVerbosity(logstate)
+        self.clog.result(f"Found converged solution, gridsize: {*['{:d}'.format(x) for x in list(conv_grid)],}")
+        return conv_grid
+
     
     def runGUIPO(self, runPODict : dict): #TODO: check typing
         """!system

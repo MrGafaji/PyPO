@@ -43,7 +43,7 @@ __device__ __inline__ void dot(cuFloatComplex (&cv1)[3], cuFloatComplex (&cv2)[3
 
     for(int n=0; n<3; n++)
     {
-        out = cuCaddf(cuCmulf(cuConjf(cv1[n]), cv2[n]), out);
+        out = cuCaddf(cuCmulf(cv1[n], cv2[n]), out);
     }
 }
 
@@ -62,7 +62,7 @@ __device__ __inline__ void dot(cuFloatComplex (&cv1)[3], float (&v2)[3], cuFloat
 
     for(int n=0; n<3; n++)
     {
-        out = cuCaddf(cuCmulf(cuConjf(cv1[n]), make_cuFloatComplex(v2[n], 0)), out);
+        out = cuCaddf(cuCmulf(cv1[n], make_cuFloatComplex(v2[n], 0)), out);
     }
 }
 
@@ -534,14 +534,128 @@ __device__ __inline__ void invmatVec4(float (&mat)[16], float (&cv1)[3], float (
  *
  * @return res cuFloatComplex number.
  */
-__device__ __inline__ cuFloatComplex expCo(cuFloatComplex z)
+__device__ __inline__ cuFloatComplex cuCexpf(cuFloatComplex z)
 {
     cuFloatComplex res;
+    float ys, yc;
     float t = exp(z.x);
-    float ys = sin(z.y);
-    float yc = cos(z.y);
+    sincosf(z.y, &ys, &yc);
     res.x = t*yc;
     res.y = t*ys;
+
+    return res;
+}
+
+
+/**
+ * Add scalar float to complex number.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCaddSf(cuFloatComplex a, float b)
+{
+    cuFloatComplex res;
+    res.x = a.x + b;
+    res.y = a.y;
+
+    return res;
+}
+
+/**
+ * Add complex number to scalar float.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCaddSf(float a, cuFloatComplex b)
+{
+    cuFloatComplex res;
+    res.x = b.x + a;
+    res.y = b.y;
+
+    return res;
+}
+
+/**
+ * Subtract scalar float from complex number.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCsubSf(cuFloatComplex a, float b)
+{
+    cuFloatComplex res;
+    res.x = a.x - b;
+    res.y = a.y;
+
+    return res;
+}
+
+/**
+ * Add complex number to scalar float.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCsubSf(float a, cuFloatComplex b)
+{
+    cuFloatComplex res;
+    res.x = a - b.x;
+    res.y = -b.y;
+
+    return res;
+}
+
+/**
+ * Multiply complex number by scalar float.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCmulSf(cuFloatComplex a, float b)
+{
+    cuFloatComplex res;
+    res.x = a.x*b;
+    res.y = a.y*b;
+
+    return res;
+}
+
+/**
+ * Multiply complex number by scalar float.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCmulSf(float a, cuFloatComplex b)
+{
+    cuFloatComplex res;
+    res.x = a*b.x;
+    res.y = a*b.y;
+
+    return res;
+}
+
+/**
+ * Divide complex number by scalar float.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCdivSf(cuFloatComplex a, float b)
+{
+    cuFloatComplex res;
+    res.x = a.x/b;
+    res.y = a.y/b;
+
+    return res;
+}
+
+/**
+ * Divide scalar by complex float.
+ *
+ * @return res cuFloatComplex number.
+ */
+__device__ __inline__ cuFloatComplex cuCdivSf(float a, cuFloatComplex b)
+{
+    cuFloatComplex ac, res;
+    ac = make_cuFloatComplex(a, 0.);
+
+    res = cuCdivf(ac, b);
 
     return res;
 }
