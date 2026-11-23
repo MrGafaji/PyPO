@@ -270,6 +270,10 @@ pyproject-hooks==1.2.0
     # via
     #   build
     #   pip-tools
+PySide6==6.4.3
+PySide6_Addons==6.4.3
+PySide6_Essentials==6.4.3
+pyqtdarktheme==2.1.0
 python-dateutil==2.9.0.post0
     # via
     #   arrow
@@ -390,3 +394,5 @@ zipp==3.20.2
 # The following packages are considered to be unsafe in a requirements file:
 # pip
 # setuptools
+
+
