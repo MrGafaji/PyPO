@@ -1,0 +1,160 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #24292f;
+  background: #fff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+.workspace {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  background: #fff;
+}
+
+.element-pane {
+  width: 260px;
+  min-height: 100vh;
+  flex: 0 0 260px;
+  padding: 20px 12px;
+  border-right: 1px solid #e2e5e9;
+  background: #f7f8fa;
+}
+
+.element-pane h1 {
+  margin: 0 0 20px 8px;
+  color: #30363d;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.accordion {
+  width: 100%;
+}
+
+.accordion-trigger {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  color: #343a40;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accordion-trigger:hover {
+  background: #eceff2;
+}
+
+.accordion-trigger:focus-visible,
+.element-widget:focus-visible {
+  outline: 2px solid #5486c7;
+  outline-offset: 2px;
+}
+
+.chevron {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: #747d86;
+  transition: transform 120ms ease;
+}
+
+.chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.accordion-label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.item-count {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 9px;
+  color: #737c85;
+  background: #e9ecef;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.accordion-content {
+  display: grid;
+  gap: 3px;
+  padding: 4px 0 0 12px;
+}
+
+.accordion-content[hidden] {
+  display: none;
+}
+
+.element-widget {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  border: 1px solid #e3e6e9;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.element-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #e7e9ec;
+  border-radius: 4px;
+  color: #66717c;
+}
+
+.element-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.element-name {
+  color: #3b4249;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.workspace-canvas {
+  min-width: 0;
+  min-height: 100vh;
+  flex: 1;
+  background: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
